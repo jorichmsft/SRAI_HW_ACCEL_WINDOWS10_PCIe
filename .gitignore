@@ -1,1 +1,4 @@
-windows10_xDMA_Driver\build_tmp
+windows10_xDMA_Driver/build
+windows10_xDMA_Driver/build/*
+windows10_xDMA_Driver/build_tmp
+windows10_xDMA_Driver/build_tmp/*
