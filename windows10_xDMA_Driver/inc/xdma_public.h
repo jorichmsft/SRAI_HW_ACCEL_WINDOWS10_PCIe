@@ -63,6 +63,27 @@ DEFINE_GUID(GUID_DEVINTERFACE_XDMA,
 #define IOCTL_XDMA_ADDRMODE_GET XDMA_IOCTL(0x4)
 #define IOCTL_XDMA_ADDRMODE_SET XDMA_IOCTL(0x5)
 
+//
+// Get BitStream specific information
+//
+typedef struct {
+    UINT64 ChannelHandle;
+    UINT64 NOPFunction;
+    UINT64 CRCFunction;
+    UINT64 EncryptFunction;
+    UINT64 DecryptFunction;
+    UINT64 Function0;
+    UINT64 Function1;
+    UINT64 Function2;
+    UINT64 Function3;
+    UINT64 ConfigData0;
+    UINT64 ConfigData1;
+    UINT64 ConfigData2;
+    UINT64 ConfigData3;
+} BITSTREAM_QUERY_INTERFACE_DATA;
+
+#define IOCTL_BITSTREAM_QUERY_INTERFACE    XDMA_IOCTL(0x6)
+
 // structure for IOCTL_XDMA_PERF_GET
 typedef struct {
     UINT64 clockCycleCount;

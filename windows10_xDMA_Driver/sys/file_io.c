@@ -470,6 +470,92 @@ static NTSTATUS IoctlSetAddrMode(IN WDFREQUEST request, IN XDMA_ENGINE* engine) 
     return status;
 }
 
+NTSTATUS
+BitStreamNop(IN PVOID Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS
+BitStreamCrcOffload(
+    IN PVOID    ChannelHandle,
+    IN PVOID    Context,
+    IN PVOID    Mdl,
+    IN UINT64   CrcValueIn,
+    OUT UINT64* CrcValueOut
+
+    )
+{
+    //
+    // TODO: May have to require a write channel to be opened
+    // to receive the CRC result.
+    //
+
+    //
+    // ChannelHandle is the XDMA_ENGINE*
+    //
+
+    UNREFERENCED_PARAMETER(ChannelHandle);
+
+    //
+    // Context is the per request context
+    //
+
+    UNREFERENCED_PARAMETER(Context);
+
+    //
+    // MDL with the data to CRC as host memory physical addresses.
+    //
+
+    UNREFERENCED_PARAMETER(Mdl);
+
+    //
+    // Inital CRC calculation value input
+    //
+
+    UNREFERENCED_PARAMETER(CrcValueIn);
+
+    //
+    // Final result output.
+    //
+
+    UNREFERENCED_PARAMETER(CrcValueOut);
+
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS IoctlBitStreamGet(IN WDFREQUEST request, IN XDMA_ENGINE* engine)
+{
+
+    ASSERT(engine != NULL);
+    BITSTREAM_QUERY_INTERFACE_DATA bitStreamData = { 0 };
+
+    RtlZeroMemory(&bitStreamData, sizeof(bitStreamData));
+
+    bitStreamData.ChannelHandle = (UINT64)engine;
+    bitStreamData.NOPFunction = (UINT64)BitStreamNop;
+    bitStreamData.CRCFunction = (UINT64)BitStreamCrcOffload;
+
+    // get handle to the IO request memory which will hold the read data
+    WDFMEMORY requestMemory;
+    NTSTATUS status = WdfRequestRetrieveOutputMemory(request, &requestMemory);
+    if (!NT_SUCCESS(status)) {
+        TraceError(DBG_IO, "WdfRequestRetrieveOutputMemory failed: %!STATUS!", status);
+        return status;
+    }
+
+    // copy from bitStreamData into request memory
+    status = WdfMemoryCopyFromBuffer(requestMemory, 0, &bitStreamData, sizeof(bitStreamData));
+    if (!NT_SUCCESS(status)) {
+        TraceError(DBG_IO, "WdfMemoryCopyFromBuffer failed: %!STATUS!", status);
+        return status;
+    }
+
+    return status;
+}
+
 // todo separate ioctl functions for sgdma and other?
 VOID EvtIoDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST request, IN size_t OutputBufferLength,
                         IN size_t InputBufferLength, IN ULONG IoControlCode) {
@@ -523,6 +609,20 @@ VOID EvtIoDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST request, IN size_t Outp
             WdfRequestComplete(request, STATUS_SUCCESS);
         }
         break;
+
+    //
+    // Get information for BitStream specific offload functions.
+    //
+    case IOCTL_BITSTREAM_QUERY_INTERFACE:
+        TraceInfo(DBG_IO, "%s_%u IOCTL_BITSTREAM_QUERY_INTERFACE",
+                  queue->engine->dir == H2C ? "H2C" : "C2H", queue->engine->channel);
+
+        status = IoctlBitStreamGet(request, queue->engine);
+        if (NT_SUCCESS(status)) {
+            WdfRequestCompleteWithInformation(request, status, sizeof(BITSTREAM_QUERY_INTERFACE_DATA));
+        }
+        break;
+
     default:
         TraceError(DBG_IO, "Unknown IOCTL code!");
         status = STATUS_NOT_SUPPORTED;
