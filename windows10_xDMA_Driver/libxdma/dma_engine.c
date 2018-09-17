@@ -31,7 +31,6 @@
 // ========================= constants ============================================================
 
 #define XDMA_ENG_IRQ_NUM        (1)
-#define XDMA_DESC_MAGIC         (0xAD4B0000)
 #define XDMA_WB_COUNT_MASK      (0x00ffffffUL)
 #define XDMA_WB_ERR_MASK        (BIT_N(31))
 

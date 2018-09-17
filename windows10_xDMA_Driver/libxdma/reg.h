@@ -89,6 +89,8 @@
 #define XDMA_DESC_EOP_BIT                   (BIT_N(4))
 
 #define XDMA_RESULT_EOP_BIT                 (BIT_N(0))
+#define XDMA_DESC_MAGIC						(0xAD4B0000)
+
 
 // Engine performance control register bits
 #define XDMA_PERF_RUN                       BIT_N(0)

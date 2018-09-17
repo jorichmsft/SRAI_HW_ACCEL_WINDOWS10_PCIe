@@ -20,8 +20,7 @@
 #define __XDMA_WINDOWS_H__
 
 // 74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d
-DEFINE_GUID(GUID_DEVINTERFACE_XDMA, 
-            0x74c7e4a9, 0x6d5d, 0x4a70, 0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d);
+DEFINE_GUID(GUID_DEVINTERFACE_XDMA, 0x74c7e4a9, 0x6d5d, 0x4a70, 0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d);
 
 #define	XDMA_FILE_USER		L"\\user"
 #define	XDMA_FILE_CONTROL	L"\\control"
@@ -62,6 +61,15 @@ DEFINE_GUID(GUID_DEVINTERFACE_XDMA,
 #define IOCTL_XDMA_PERF_GET     XDMA_IOCTL(0x3)
 #define IOCTL_XDMA_ADDRMODE_GET XDMA_IOCTL(0x4)
 #define IOCTL_XDMA_ADDRMODE_SET XDMA_IOCTL(0x5)
+
+//
+// Custom IOCTL operation that performs a DMA write
+// followed by a DMA read to the device, returning
+// only when both operations are complete. This is
+// specific for testing our current prototype.
+//
+
+#define IOCTL_XDMA_BLOCKING_OP  XDMA_IOCTL(0x10) 
 
 //
 // Get BitStream specific information

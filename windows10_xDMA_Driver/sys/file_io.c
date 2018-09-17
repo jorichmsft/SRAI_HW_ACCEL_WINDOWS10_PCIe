@@ -561,12 +561,16 @@ VOID EvtIoDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST request, IN size_t Outp
                         IN size_t InputBufferLength, IN ULONG IoControlCode) {
 
     UNREFERENCED_PARAMETER(Queue);
-    UNREFERENCED_PARAMETER(OutputBufferLength);
-    UNREFERENCED_PARAMETER(InputBufferLength);
+
 
     PFILE_CONTEXT file = GetFileContext(WdfRequestGetFileObject(request));
     PQUEUE_CONTEXT queue = GetQueueContext(file->queue);
     NTSTATUS status = STATUS_NOT_SUPPORTED;
+	PVOID inputBuffer;
+	PVOID outputBuffer;
+	PHYSICAL_ADDRESS physInputBuffer;
+	PHYSICAL_ADDRESS physOutputBuffer;
+
 
     ASSERT(queue != NULL);
     if (queue->engine == NULL) {
@@ -574,6 +578,8 @@ VOID EvtIoDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST request, IN size_t Outp
         status = STATUS_INVALID_PARAMETER;
         goto exit;
     }
+
+	DMA_DESCRIPTOR *descriptor = (DMA_DESCRIPTOR*)WdfCommonBufferGetAlignedVirtualAddress(queue->engine->descBuffer);
 
     // ioctl codes defined in xdma_public.h
 
@@ -609,6 +615,93 @@ VOID EvtIoDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST request, IN size_t Outp
             WdfRequestComplete(request, STATUS_SUCCESS);
         }
         break;
+
+	// MS prototype-specific call
+	case IOCTL_XDMA_BLOCKING_OP:
+		TraceInfo(DBG_IO, "IOCTL_XDMA_BLOCKING_OP");
+		
+		// Retrieve input buffer (to send to accelerator)
+		status = WdfRequestRetrieveInputBuffer(request,
+			InputBufferLength,
+			&inputBuffer,
+			NULL);
+
+		if (!NT_SUCCESS(status)) {
+			TraceError(DBG_IO,
+				"WdfRequestRetrieveInputBuffer failed %!STATUS!",
+				status);
+			break;
+		}
+
+		descriptor->control = XDMA_DESC_MAGIC;
+		descriptor->numBytes = (UINT32)InputBufferLength;
+		// source is host memory. TODO lock page for inputBuffer
+		physInputBuffer = MmGetPhysicalAddress(inputBuffer);
+		descriptor->srcAddrLo = physInputBuffer.LowPart;
+		descriptor->srcAddrHi = physInputBuffer.HighPart;
+		// assuming this is a streaming interface, destination address isn't used
+		descriptor->dstAddrLo = 0;
+		descriptor->dstAddrHi = 0;
+
+		descriptor->nextLo = 0;
+		descriptor->nextHi = 0;
+		// stop engine and request an interrupt from the engine
+		descriptor->control |= (XDMA_DESC_STOP_BIT | XDMA_DESC_COMPLETED_BIT);
+		descriptor->control |= XDMA_DESC_EOP_BIT;
+		TraceVerbose(DBG_IO, "descriptor->control=0x%08x", descriptor->control);
+		
+		// Send to accelerator 
+		MemoryBarrier();
+
+		// start the engine
+		EngineStart(queue->engine);
+
+		MemoryBarrier();
+
+		// Wait for completion - Poll the write-back buffer for DMA transfer completion
+		status = EnginePollTransfer(queue->engine);
+
+		// Retrieve output buffer 
+		status = WdfRequestRetrieveOutputBuffer(request,
+			OutputBufferLength,
+			&outputBuffer,
+			NULL);
+
+		if (!NT_SUCCESS(status)) {
+			TraceError(DBG_IO,
+				"WdfRequestRetrieveOutputBuffer failed %!STATUS!",
+				status);
+			break;
+		}
+
+		// destination is host memory
+		// assuming this is a streaming interface, source address isn't used
+		descriptor->srcAddrLo = 0;
+		descriptor->srcAddrHi = 0;
+		// TODO lock page for outputBuffer?
+		physOutputBuffer = MmGetPhysicalAddress(outputBuffer);
+		descriptor->dstAddrLo = physOutputBuffer.LowPart;
+		descriptor->dstAddrHi = physOutputBuffer.HighPart;
+
+
+		// Get result from accelerator (wait for completion)
+		MemoryBarrier();
+
+		// start the engine
+		EngineStart(queue->engine);
+
+		MemoryBarrier();
+
+		// Wait for completion - Poll the write-back buffer for DMA transfer completion
+		status = EnginePollTransfer(queue->engine);
+
+		WdfRequestSetInformation(request, OutputBufferLength);
+
+		if (NT_SUCCESS(status)) {
+			WdfRequestComplete(request, STATUS_SUCCESS);
+		}
+
+		break;
 
     //
     // Get information for BitStream specific offload functions.
